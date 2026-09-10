@@ -41,6 +41,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
+    'rest_framework',
+    
+    'apps.users',
 ]
 
 MIDDLEWARE = [
@@ -106,6 +110,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+AUTH_USER_MODEL = "users.User"
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
@@ -119,10 +124,13 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.1/howto/static-files/
+# Static / Media
 
-STATIC_URL = 'static/'
+STATIC_URL = "back_static/"
+STATIC_ROOT = "back_static"
+
+MEDIA_URL = "back_media/"
+MEDIA_ROOT = "back_media"
 
 
 # Email

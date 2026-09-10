@@ -1,5 +1,10 @@
 .env
 .venv/
 db.sqlite3
-config/__pycache__
+*.py[cod]
 __pycache__/
+back_media/
+back_static/
+.idea/
+.vscode/
+.DS_Store
