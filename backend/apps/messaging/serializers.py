@@ -1,0 +1,23 @@
+from rest_framework import serializers
+from .models import Message
+
+class MessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Message
+        fields = [
+            'id',
+            'conversation',
+            'sender',
+            'text',
+            'created_at',
+            'updated_at',
+            'is_deleted'
+        ]
+        read_only_fields = [
+            "id",
+            "conversation",
+            "sender",
+            "created_at",
+            "updated_at",
+            "is_deleted",
+        ]
