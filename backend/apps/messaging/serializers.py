@@ -13,3 +13,11 @@ class MessageSerializer(serializers.ModelSerializer):
             'updated_at',
             'is_deleted'
         ]
+        read_only_fields = [
+            "id",
+            "conversation",
+            "sender",
+            "created_at",
+            "updated_at",
+            "is_deleted",
+        ]
