@@ -16,6 +16,11 @@ class ConversationSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',    
         ]
+        read_only_fields = [
+            'id',
+            'type',
+            'created_at',
+        ]
         
 
 class ConversationMemberSerializer(serializers.ModelSerializer):
@@ -26,6 +31,12 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
             'conversation',
             'user',
             'role',
+            'joined_at',
+        ]
+        read_only_fields = [
+            'id',
+            'conversation',
+            'user',
             'joined_at',
         ]
         
