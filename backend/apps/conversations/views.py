@@ -1,39 +1,106 @@
 from rest_framework import generics
-from rest_framework.views import APIView
 from .models import Conversation, ConversationMember
 from .serializers import ConversationSerializer, ConversationMemberSerializer, PrivateConversationCreateSerializer, GroupConversationCreateSerializer
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
+from .permissions import (CanDeleteConversation, CanUpdateConversation, IsConversationMember, 
+    CanChangeMemberRole, CanManageMembers, CanRemoveMember)
 
 
 
 class ConversationListAPIView(generics.ListAPIView):
-    queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Conversation.objects.filter(
+            members__user=self.request.user
+        ).distinct()
     
 
 class ConversationDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Conversation.objects.filter(
+            members__user=self.request.user
+        ).distinct()
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [
+                IsAuthenticated(),
+                IsConversationMember(),
+            ]
+
+        if self.request.method in ["PUT", "PATCH"]:
+            return [
+                IsAuthenticated(),
+                CanUpdateConversation(),
+            ]
+
+        if self.request.method == "DELETE":
+            return [
+                IsAuthenticated(),
+                CanDeleteConversation(),
+            ]
+
+        return [IsAuthenticated()]
     
 
 class ConversationMemberListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = ConversationMemberSerializer
-    permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-        return ConversationMember.objects.filter(conversation_id=self.kwargs['conversation_id'])
+        return ConversationMember.objects.filter(
+            conversation_id=self.kwargs["conversation_id"]
+        )
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [
+                IsAuthenticated(),
+                IsConversationMember(),
+            ]
+
+        if self.request.method == "POST":
+            return [
+                IsAuthenticated(),
+                CanManageMembers(),
+            ]
+
+        return [IsAuthenticated()]
+
     
 
 class ConversationMemberDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ConversationMemberSerializer
-    permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-            return ConversationMember.objects.filter(conversation_id=self.kwargs['conversation_id'])
+        return ConversationMember.objects.filter(
+            conversation_id=self.kwargs["conversation_id"]
+        )
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [
+                IsAuthenticated(),
+                IsConversationMember(),
+            ]
+
+        if self.request.method in ["PUT", "PATCH"]:
+            return [
+                IsAuthenticated(),
+                CanChangeMemberRole(),
+            ]
+
+        if self.request.method == "DELETE":
+            return [
+                IsAuthenticated(),
+                CanRemoveMember(),
+            ]
+
+        return [IsAuthenticated()]
         
 
 
