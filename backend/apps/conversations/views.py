@@ -5,11 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .permissions import (CanDeleteConversation, CanUpdateConversation, IsConversationMember, 
     CanChangeMemberRole, CanManageMembers, CanRemoveMember)
+from config.pagination import ConversationCursorPagination
 
 
 
 class ConversationListAPIView(generics.ListAPIView):
     serializer_class = ConversationSerializer
+    pagination_class = ConversationCursorPagination
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):

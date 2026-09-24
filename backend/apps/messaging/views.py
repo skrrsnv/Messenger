@@ -4,10 +4,12 @@ from .serializers import MessageSerializer
 from rest_framework.permissions import IsAuthenticated
 from .permissions import IsMessageSender
 from apps.conversations.permissions import IsConversationMember
+from config.pagination import MessageCursorPagination
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = MessageSerializer
+    pagination_class = MessageCursorPagination
     permission_classes = [IsAuthenticated, IsConversationMember,]
     def get_queryset(self):
         return Message.objects.filter(
