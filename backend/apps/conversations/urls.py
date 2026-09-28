@@ -11,5 +11,5 @@ urlpatterns = [
     path('<int:conversation_id>/members/', ConversationMemberListCreateAPIView.as_view()),
     path('<int:conversation_id>/members/<int:pk>/', ConversationMemberDetailAPIView.as_view()),
     path('<int:conversation_id>/messages/', MessageListCreateAPIView.as_view()),
-    path('<int:conversation_id>/messages/<int:pk>', MessageDetailAPIView.as_view())
+    path('<int:conversation_id>/messages/<int:pk>/', MessageDetailAPIView.as_view())
 ]

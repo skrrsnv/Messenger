@@ -22,16 +22,16 @@ class MessageSerializer(serializers.ModelSerializer):
             "is_deleted",
         ]
         
-        def validate(self, attrs):
-            if self.instance and self.instance.is_deleted:
-                raise serializers.ValidationError("Deleted messages cannot be edited.")
+    def validate(self, attrs):
+        if self.instance and self.instance.is_deleted:
+            raise serializers.ValidationError("Deleted messages cannot be edited.")
 
-            return attrs
+        return attrs
 
-        def to_representation(self, instance):
-            data = super().to_representation(instance)
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
 
-            if instance.is_deleted:
-                data["text"] = ""
+        if instance.is_deleted:
+            data["text"] = ""
 
-            return data
+        return data
