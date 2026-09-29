@@ -1,4 +1,4 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from .models import Message, MessageRead
 from .serializers import MessageSerializer, MessageReadSerializer
 from rest_framework.permissions import IsAuthenticated
@@ -6,6 +6,7 @@ from .permissions import IsMessageSender
 from apps.conversations.permissions import IsConversationMember
 from config.pagination import MessageCursorPagination
 from django.shortcuts import get_object_or_404
+from rest_framework.response import Response
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
@@ -63,6 +64,12 @@ class MessageReadCreateAPIView(generics.CreateAPIView):
             pk=kwargs["message_id"],
             conversation_id=kwargs["conversation_id"],
         )
+        
+        if message.sender == request.user:
+            return Response(
+                {"detail": "You cannot mark your own message as read."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         message_read, created = MessageRead.objects.get_or_create(
             message=message,
