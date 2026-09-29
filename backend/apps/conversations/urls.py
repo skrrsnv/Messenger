@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (ConversationListAPIView, ConversationDetailAPIView, ConversationMemberListCreateAPIView,
 ConversationMemberDetailAPIView, PrivateConversationCreateAPIView, GroupConversationCreateAPIView)
-from apps.messaging.views import MessageListCreateAPIView, MessageDetailAPIView
+from apps.messaging.views import MessageListCreateAPIView, MessageDetailAPIView, MessageReadCreateAPIView
 
 urlpatterns = [
     path('', ConversationListAPIView.as_view()),
@@ -11,5 +11,6 @@ urlpatterns = [
     path('<int:conversation_id>/members/', ConversationMemberListCreateAPIView.as_view()),
     path('<int:conversation_id>/members/<int:pk>/', ConversationMemberDetailAPIView.as_view()),
     path('<int:conversation_id>/messages/', MessageListCreateAPIView.as_view()),
-    path('<int:conversation_id>/messages/<int:pk>/', MessageDetailAPIView.as_view())
+    path('<int:conversation_id>/messages/<int:pk>/', MessageDetailAPIView.as_view()),
+    path('<int:conversation_id>/messages/<int:message_id>/read/', MessageReadCreateAPIView.as_view()),
 ]
