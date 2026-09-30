@@ -36,7 +36,6 @@ class ConversationMemberSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id',
             'conversation',
-            'user',
             'joined_at',
         ]
         

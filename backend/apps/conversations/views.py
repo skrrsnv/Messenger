@@ -32,7 +32,6 @@ class ConversationDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method == "GET":
             return [
                 IsAuthenticated(),
-                IsConversationMember(),
             ]
 
         if self.request.method in ["PUT", "PATCH"]:
@@ -52,6 +51,7 @@ class ConversationDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 
 class ConversationMemberListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = ConversationMemberSerializer
+    
 
     def get_queryset(self):
         return ConversationMember.objects.filter(
@@ -72,7 +72,11 @@ class ConversationMemberListCreateAPIView(generics.ListCreateAPIView):
             ]
 
         return [IsAuthenticated()]
-
+    
+    def perform_create(self, serializer):
+        serializer.save(
+        conversation_id=self.kwargs["conversation_id"]
+    )
     
 
 class ConversationMemberDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
