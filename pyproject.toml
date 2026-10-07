@@ -13,7 +13,9 @@ dependencies = [
     "psycopg2-binary (>=2.9.13,<3.0.0)",
     "pillow (>=12.3.0,<13.0.0)",
     "djangorestframework-simplejwt (>=5.5.1,<6.0.0)",
-    "django-redis (>=7.0.0,<8.0.0)"
+    "django-redis (>=7.0.0,<8.0.0)",
+    "fastapi (>=0.142.2,<0.143.0)",
+    "uvicorn[standard] (>=0.54.0,<0.55.0)"
 ]
 
 
