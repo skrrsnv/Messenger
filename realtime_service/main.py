@@ -1,7 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from .auth import decode_access_token
 from .connection_manager import ConnectionManager
-from .django_client import is_conversation_member
+from .django_client import is_conversation_member, validate_token
 
 app = FastAPI()
 
@@ -19,9 +18,9 @@ async def websocket_chat(
         await websocket.close(code=1008)
         return
 
-    try:
-        user_id = decode_access_token(token)
-    except Exception:
+    user_id = await validate_token(token)
+
+    if user_id is None:
         await websocket.close(code=1008)
         return
     
@@ -34,7 +33,7 @@ async def websocket_chat(
         await websocket.close(code=1008)
         return
 
-    await manager.connect(websocket, conversation_id)
+    await manager.connect(conversation_id, websocket)
 
     print(
         f"User {user_id} connected "

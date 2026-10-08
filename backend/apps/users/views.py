@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
 class UserListAPIView(generics.ListAPIView):
@@ -57,3 +58,13 @@ class LogoutAPIView(APIView):
             {"detail": "Successfully logged out."},
             status=200,
         )    
+        
+        
+class InternalTokenValidationAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request):
+        return Response({
+            "user_id": request.user.id,
+        })

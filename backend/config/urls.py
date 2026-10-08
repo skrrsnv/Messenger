@@ -9,7 +9,9 @@ urlpatterns = [
     path('api/v1/users/', include('apps.users.urls')),
     path('api/v1/auth/', include('apps.users.auth_urls')),
     path('api/v1/conversations/', include('apps.conversations.urls')),
+    
     path('api/v1/internal/conversations/', include('apps.conversations.internal_urls')),
+    path('api/v1/internal/auth/validate/', include('apps.users.internal_urls')),
 ]
 
 
