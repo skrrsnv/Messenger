@@ -3,6 +3,7 @@ from .models import Conversation, ConversationMember
 from .serializers import ConversationSerializer, ConversationMemberSerializer, PrivateConversationCreateSerializer, GroupConversationCreateSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from .permissions import (CanDeleteConversation, CanUpdateConversation, IsConversationMember, 
     CanChangeMemberRole, CanManageMembers, CanRemoveMember)
 from config.pagination import ConversationCursorPagination
@@ -156,3 +157,16 @@ class GroupConversationCreateAPIView(generics.CreateAPIView):
             ).data,
             status=201,
         )
+        
+
+class InternalConversationMembershipAPIView(APIView):
+
+    def get(self, request, conversation_id, user_id):
+        is_member = ConversationMember.objects.filter(
+            conversation_id=conversation_id,
+            user_id=user_id,
+        ).exists()
+
+        return Response({
+            "is_member": is_member,
+        })
