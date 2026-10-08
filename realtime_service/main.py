@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from .auth import decode_access_token
 from .connection_manager import ConnectionManager
+from .django_client import is_conversation_member
 
 app = FastAPI()
 
@@ -21,6 +22,15 @@ async def websocket_chat(
     try:
         user_id = decode_access_token(token)
     except Exception:
+        await websocket.close(code=1008)
+        return
+    
+    is_member = await is_conversation_member(
+        conversation_id=conversation_id,
+        user_id=user_id,
+    )
+
+    if not is_member:
         await websocket.close(code=1008)
         return
 
