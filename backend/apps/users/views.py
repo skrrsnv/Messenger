@@ -1,10 +1,11 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from .models import User
 from .serializers import UserSerializer, RegisterSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -48,16 +49,22 @@ class LogoutAPIView(APIView):
         if not refresh_token:
             return Response(
                 {"detail": "Refresh token is required."},
-                status=400,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        token = RefreshToken(refresh_token)
-        token.blacklist()
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except TokenError:
+            return Response(
+                {"detail": "Invalid or blacklisted refresh token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response(
             {"detail": "Successfully logged out."},
-            status=200,
-        )    
+            status=status.HTTP_200_OK,
+        )   
         
         
 class InternalTokenValidationAPIView(APIView):
