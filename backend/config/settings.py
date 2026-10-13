@@ -120,6 +120,7 @@ CACHES = {
     }
 }
 
+REDIS_URL = os.getenv("REDIS_URL")
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=180),
