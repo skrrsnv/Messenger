@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from .connection_manager import ConnectionManager
-from .django_client import is_conversation_member, validate_token
+from .django_client import is_conversation_member, validate_token, create_message
 
 app = FastAPI()
 
@@ -42,9 +42,45 @@ async def websocket_chat(
 
     try:
         while True:
-            await websocket.receive_text()
+            text = await websocket.receive_text()
+            
+            if not text.strip():
+                await websocket.send_json({
+                    "error": "Message text cannot be empty."
+                })
+                continue
+            
+            try:
+                message = await create_message(
+                    conversation_id=conversation_id,
+                    text=text,
+                    user_access_token=token,
+                )
+            except Exception:
+                print("Error communicating with Django")
+                await websocket.send_json({
+                    "error": "Unable to save message."
+                })
+                continue
+
+            if message is None:
+                await websocket.send_json({
+                    "error": "Unable to save message."
+                })
+                continue
+            
+            await manager.broadcast_json(
+                conversation_id,
+                {
+                    "type": "message",
+                    "data": message,
+                },
+            )
 
     except WebSocketDisconnect:
+        pass
+
+    finally:
         manager.disconnect(conversation_id, websocket)
 
         print(
