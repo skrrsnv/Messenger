@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from apps.users.internal_permissions import HasInternalAPIToken
 from apps.conversations.models import ConversationMember
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
@@ -88,19 +89,12 @@ class MessageReadCreateAPIView(generics.CreateAPIView):
         
 
 class InternalMessageCreateAPIView(APIView):
-    authentication_classes = []
-    permission_classes = [HasInternalAPIToken]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [HasInternalAPIToken, IsAuthenticated]
 
-    def post(self, request):
-        user_id = request.data.get("user_id")
-        conversation_id = request.data.get("conversation_id")
+    def post(self, request, conversation_id):
+        user_id = request.user.id
         text = request.data.get("text")
-
-        if not user_id or not conversation_id:
-            return Response(
-                {"detail": "user_id and conversation_id are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         if not isinstance(text, str) or not text.strip():
             return Response(
