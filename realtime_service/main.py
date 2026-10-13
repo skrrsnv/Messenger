@@ -1,10 +1,35 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from .connection_manager import ConnectionManager
-from .django_client import is_conversation_member, validate_token
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
-app = FastAPI()
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+
+from .connection_manager import ConnectionManager
+from .django_client import (
+    is_conversation_member,
+    validate_token,
+    create_message,
+)
+from .redis_subscriber import redis_event_listener
+
 
 manager = ConnectionManager()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    subscriber_task = asyncio.create_task(
+        redis_event_listener(manager)
+    )
+
+    try:
+        yield
+    finally:
+        subscriber_task.cancel()
+
+        with suppress(asyncio.CancelledError):
+            await subscriber_task
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.websocket("/ws/conversations/{conversation_id}/")
@@ -42,9 +67,40 @@ async def websocket_chat(
 
     try:
         while True:
-            await websocket.receive_text()
+            text = await websocket.receive_text()
+            
+            if not text.strip():
+                await websocket.send_json({
+                    "type": "error",
+                    "detail": "Message text cannot be empty.",
+                })
+                continue
+            
+            try:
+                message = await create_message(
+                    conversation_id=conversation_id,
+                    text=text,
+                    user_access_token=token,
+                )
+            except Exception:
+                print("Error communicating with Django")
+                await websocket.send_json({
+                    "type": "error",
+                    "detail": "Unable to save message.",
+                })
+                continue
+
+            if message is None:
+                await websocket.send_json({
+                    "type": "error",
+                    "detail": "Unable to save message.",
+                })
+                continue
 
     except WebSocketDisconnect:
+        pass
+
+    finally:
         manager.disconnect(conversation_id, websocket)
 
         print(

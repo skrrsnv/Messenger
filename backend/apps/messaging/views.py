@@ -7,6 +7,12 @@ from apps.conversations.permissions import IsConversationMember
 from config.pagination import MessageCursorPagination
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
+from apps.users.internal_permissions import HasInternalAPIToken
+from apps.conversations.models import ConversationMember
+from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.db import transaction
+from apps.conversations.events import publish_message_created
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
@@ -81,4 +87,62 @@ class MessageReadCreateAPIView(generics.CreateAPIView):
         return Response(
             serializer.data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+        
+
+class InternalMessageCreateAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [HasInternalAPIToken, IsAuthenticated]
+
+    def post(self, request, conversation_id):
+        user_id = request.user.id
+        text = request.data.get("text")
+
+        if not isinstance(text, str) or not text.strip():
+            return Response(
+                {"detail": "Message text cannot be empty."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        is_member = ConversationMember.objects.filter(
+            conversation_id=conversation_id,
+            user_id=user_id,
+        ).exists()
+
+        if not is_member:
+            return Response(
+                {"detail": "User is not a conversation member."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = MessageSerializer(
+            data={"text": text.strip()},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        message = Message.objects.create(
+            conversation_id=conversation_id,
+            sender_id=user_id,
+            text=serializer.validated_data["text"],
+        )
+
+        event = {
+            "type": "message.created",
+            "conversation_id": message.conversation_id,
+            "data": {
+                "id": message.id,
+                "conversation": message.conversation_id,
+                "sender": message.sender_id,
+                "text": message.text,
+                "created_at": message.created_at.isoformat(),
+            },
+        }
+
+        transaction.on_commit(
+            lambda: publish_message_created(event)
+        )
+
+        return Response(
+            event["data"],
+            status=status.HTTP_201_CREATED,
         )
