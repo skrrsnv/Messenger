@@ -1,4 +1,4 @@
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 
 
 class ConnectionManager:
@@ -36,3 +36,19 @@ class ConnectionManager:
                 conversation_id,
                 None,
             )
+    
+    async def broadcast_json(
+        self,
+        conversation_id: int,
+        message: dict,
+    ):
+        connections = self.active_connections.get(
+            conversation_id,
+            [],
+        )
+
+        for websocket in connections.copy():
+            try:
+                await websocket.send_json(message)
+            except (WebSocketDisconnect, RuntimeError):
+                self.disconnect(conversation_id, websocket)
