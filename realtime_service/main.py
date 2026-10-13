@@ -1,10 +1,35 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from .connection_manager import ConnectionManager
-from .django_client import is_conversation_member, validate_token, create_message
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
-app = FastAPI()
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+
+from .connection_manager import ConnectionManager
+from .django_client import (
+    is_conversation_member,
+    validate_token,
+    create_message,
+)
+from .redis_subscriber import redis_event_listener
+
 
 manager = ConnectionManager()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    subscriber_task = asyncio.create_task(
+        redis_event_listener(manager)
+    )
+
+    try:
+        yield
+    finally:
+        subscriber_task.cancel()
+
+        with suppress(asyncio.CancelledError):
+            await subscriber_task
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.websocket("/ws/conversations/{conversation_id}/")
@@ -46,7 +71,8 @@ async def websocket_chat(
             
             if not text.strip():
                 await websocket.send_json({
-                    "error": "Message text cannot be empty."
+                    "type": "error",
+                    "detail": "Message text cannot be empty.",
                 })
                 continue
             
@@ -59,23 +85,17 @@ async def websocket_chat(
             except Exception:
                 print("Error communicating with Django")
                 await websocket.send_json({
-                    "error": "Unable to save message."
+                    "type": "error",
+                    "detail": "Unable to save message.",
                 })
                 continue
 
             if message is None:
                 await websocket.send_json({
-                    "error": "Unable to save message."
+                    "type": "error",
+                    "detail": "Unable to save message.",
                 })
                 continue
-            
-            await manager.broadcast_json(
-                conversation_id,
-                {
-                    "type": "message",
-                    "data": message,
-                },
-            )
 
     except WebSocketDisconnect:
         pass
