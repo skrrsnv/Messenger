@@ -11,6 +11,8 @@ from apps.users.internal_permissions import HasInternalAPIToken
 from apps.conversations.models import ConversationMember
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.db import transaction
+from apps.conversations.events import publish_message_created
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
@@ -124,13 +126,23 @@ class InternalMessageCreateAPIView(APIView):
             text=serializer.validated_data["text"],
         )
 
-        return Response(
-            {
+        event = {
+            "type": "message.created",
+            "conversation_id": message.conversation_id,
+            "data": {
                 "id": message.id,
                 "conversation": message.conversation_id,
                 "sender": message.sender_id,
                 "text": message.text,
                 "created_at": message.created_at.isoformat(),
             },
+        }
+
+        transaction.on_commit(
+            lambda: publish_message_created(event)
+        )
+
+        return Response(
+            event["data"],
             status=status.HTTP_201_CREATED,
         )
