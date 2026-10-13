@@ -7,6 +7,9 @@ from apps.conversations.permissions import IsConversationMember
 from config.pagination import MessageCursorPagination
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
+from apps.users.internal_permissions import HasInternalAPIToken
+from apps.conversations.models import ConversationMember
+from rest_framework.views import APIView
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
@@ -81,4 +84,59 @@ class MessageReadCreateAPIView(generics.CreateAPIView):
         return Response(
             serializer.data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+        
+
+class InternalMessageCreateAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalAPIToken]
+
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        conversation_id = request.data.get("conversation_id")
+        text = request.data.get("text")
+
+        if not user_id or not conversation_id:
+            return Response(
+                {"detail": "user_id and conversation_id are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not isinstance(text, str) or not text.strip():
+            return Response(
+                {"detail": "Message text cannot be empty."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        is_member = ConversationMember.objects.filter(
+            conversation_id=conversation_id,
+            user_id=user_id,
+        ).exists()
+
+        if not is_member:
+            return Response(
+                {"detail": "User is not a conversation member."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = MessageSerializer(
+            data={"text": text.strip()},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        message = Message.objects.create(
+            conversation_id=conversation_id,
+            sender_id=user_id,
+            text=serializer.validated_data["text"],
+        )
+
+        return Response(
+            {
+                "id": message.id,
+                "conversation": message.conversation_id,
+                "sender": message.sender_id,
+                "text": message.text,
+                "created_at": message.created_at.isoformat(),
+            },
+            status=status.HTTP_201_CREATED,
         )
