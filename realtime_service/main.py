@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager, suppress
+import json
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -64,38 +65,74 @@ async def websocket_chat(
         f"User {user_id} connected "
         f"to conversation {conversation_id}"
     )
-
+    
+    
     try:
         while True:
-            text = await websocket.receive_text()
-            
-            if not text.strip():
-                await websocket.send_json({
-                    "type": "error",
-                    "detail": "Message text cannot be empty.",
-                })
-                continue
-            
+            raw_data = await websocket.receive_text()
+
             try:
-                message = await create_message(
-                    conversation_id=conversation_id,
-                    text=text,
-                    user_access_token=token,
-                )
-            except Exception:
-                print("Error communicating with Django")
+                data = json.loads(raw_data)
+            except json.JSONDecodeError:
                 await websocket.send_json({
                     "type": "error",
-                    "detail": "Unable to save message.",
+                    "detail": "Invalid JSON.",
                 })
                 continue
 
-            if message is None:
+            if not isinstance(data, dict):
                 await websocket.send_json({
                     "type": "error",
-                    "detail": "Unable to save message.",
+                    "detail": "Event must be a JSON object.",
                 })
                 continue
+
+            event_type = data.get("type")
+
+            if event_type in ("typing.start", "typing.stop"):
+                await websocket.send_json({
+                    "type": "error",
+                    "detail": "Typing event handling is not implemented yet.",
+                })
+                continue
+
+            if event_type == "message.send":
+                text = data.get("text")
+
+                if not isinstance(text, str) or not text.strip():
+                    await websocket.send_json({
+                        "type": "error",
+                        "detail": "Message text cannot be empty.",
+                    })
+                    continue
+
+                try:
+                    message = await create_message(
+                        conversation_id=conversation_id,
+                        text=text,
+                        user_access_token=token,
+                    )
+                except Exception:
+                    print("Error communicating with Django")
+                    await websocket.send_json({
+                        "type": "error",
+                        "detail": "Unable to save message.",
+                    })
+                    continue
+
+                if message is None:
+                    await websocket.send_json({
+                        "type": "error",
+                        "detail": "Unable to save message.",
+                    })
+                    continue
+
+                continue
+
+            await websocket.send_json({
+                "type": "error",
+                "detail": "Unsupported event type.",
+            })
 
     except WebSocketDisconnect:
         pass
