@@ -58,7 +58,7 @@ async def websocket_chat(
         await websocket.close(code=1008)
         return
 
-    await manager.connect(conversation_id, websocket)
+    await manager.connect(conversation_id, websocket, user_id)
 
     print(
         f"User {user_id} connected "
