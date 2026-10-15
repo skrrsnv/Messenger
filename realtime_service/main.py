@@ -1,3 +1,5 @@
+import os
+import redis.asyncio as redis
 import asyncio
 from contextlib import asynccontextmanager, suppress
 import json
@@ -14,6 +16,34 @@ from .redis_subscriber import redis_event_listener
 
 
 manager = ConnectionManager()
+
+REDIS_URL = os.environ["REDIS_URL"]
+CHANNEL = "chat.events"
+
+async def publish_typing_event(
+    event_type: str,
+    conversation_id: int,
+    user_id: int,
+):
+    client = redis.from_url(
+        REDIS_URL,
+        decode_responses=True,
+    )
+
+    try:
+        event = {
+            "type": event_type,
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+        }
+
+        await client.publish(
+            CHANNEL,
+            json.dumps(event),
+        )
+    finally:
+        await client.aclose()
+        
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,10 +120,19 @@ async def websocket_chat(
             event_type = data.get("type")
 
             if event_type in ("typing.start", "typing.stop"):
-                await websocket.send_json({
-                    "type": "error",
-                    "detail": "Typing event handling is not implemented yet.",
-                })
+                try:
+                    await publish_typing_event(
+                        event_type=event_type,
+                        conversation_id=conversation_id,
+                        user_id=user_id,
+                    )
+                except Exception:
+                    print("Error publishing typing event")
+                    await websocket.send_json({
+                        "type": "error",
+                        "detail": "Unable to publish typing event.",
+                    })
+
                 continue
 
             if event_type == "message.send":
