@@ -34,7 +34,11 @@ async def redis_event_listener(
                 try:
                     event = json.loads(message["data"])
 
-                    if event.get("type") != "message.created":
+                    if event.get("type") not in (
+                        "message.created",
+                        "typing.start",
+                        "typing.stop",
+                    ):
                         continue
 
                     conversation_id = int(
