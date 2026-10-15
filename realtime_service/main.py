@@ -121,6 +121,11 @@ async def websocket_chat(
 
             if event_type in ("typing.start", "typing.stop"):
                 try:
+                    manager.set_typing(
+                        conversation_id,
+                        user_id,
+                        event_type == "typing.start",
+                    )
                     await publish_typing_event(
                         event_type=event_type,
                         conversation_id=conversation_id,
@@ -177,7 +182,22 @@ async def websocket_chat(
         pass
 
     finally:
+        typing_user_id = manager.clear_typing_on_disconnect(
+            conversation_id,
+            websocket,
+        )
+
         manager.disconnect(conversation_id, websocket)
+
+        if typing_user_id is not None:
+            try:
+                await publish_typing_event(
+                    event_type="typing.stop",
+                    conversation_id=conversation_id,
+                    user_id=typing_user_id,
+                )
+            except Exception:
+                print("Error publishing typing.stop on disconnect")
 
         print(
             f"User {user_id} disconnected "
