@@ -1,0 +1,77 @@
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+    command: >
+      python backend/manage.py runserver 0.0.0.0:8000
+    env_file:
+      - ../../.env
+    environment:
+      DJANGO_URL: http://backend:8000
+      REDIS_URL: redis://redis:6379/1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../..:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  realtime:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+    command: >
+      uvicorn realtime_service.main:app
+      --host 0.0.0.0
+      --port 8001
+      --reload
+    env_file:
+      - ../../.env
+    ports:
+      - "8001:8001"
+    volumes:
+      - ../..:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
