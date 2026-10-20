@@ -9,3 +9,4 @@ back_static/
 .vscode/
 .DS_Store
 *.rdb
+.pytest_cache
