@@ -15,12 +15,9 @@ CHANNEL = "chat.events"
 
 async def redis_event_listener(
     manager: ConnectionManager,
+    client: redis.Redis,
 ):
     while True:
-        client = redis.from_url(
-            REDIS_URL,
-            decode_responses=True,
-        )
         pubsub = client.pubsub()
 
         try:
@@ -38,6 +35,7 @@ async def redis_event_listener(
                         "message.created",
                         "typing.start",
                         "typing.stop",
+                        "presence.update",
                     ):
                         continue
 
@@ -66,4 +64,3 @@ async def redis_event_listener(
 
         finally:
             await pubsub.aclose()
-            await client.aclose()
