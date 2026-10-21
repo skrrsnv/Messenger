@@ -78,3 +78,48 @@ async def create_message(conversation_id: int, text: str, user_access_token: str
         return None
 
     return response.json()
+
+
+
+async def get_user_conversation_ids(conversation_id: int, user_id: int) -> list[int]:
+    internal_token = os.getenv("INTERNAL_API_TOKEN")
+
+    if not internal_token:
+        raise RuntimeError("INTERNAL_API_TOKEN is not configured")
+
+    url = (
+        f"{DJANGO_URL}/api/v1/internal/"
+        f"conversations/{conversation_id}/members/"
+    )
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            url,
+            headers={"X-Internal-Token": internal_token},
+            timeout=10.0,
+        )
+
+    response.raise_for_status()
+    return response.json()["conversation_ids"]
+
+
+async def persist_last_seen(user_id: int) -> str:
+    internal_token = os.getenv("INTERNAL_API_TOKEN")
+
+    if not internal_token:
+        raise RuntimeError("INTERNAL_API_TOKEN is not configured")
+
+    url = (
+        f"{DJANGO_URL}/api/v1/internal/"
+        f"users/{user_id}/last-seen/"
+    )
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            url,
+            headers={"X-Internal-Token": internal_token},
+            timeout=10.0,
+        )
+
+    response.raise_for_status()
+    return response.json()["last_seen"]

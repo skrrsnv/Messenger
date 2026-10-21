@@ -8,6 +8,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.utils import timezone
+from .internal_permissions import HasInternalAPIToken
+from django.contrib.auth import get_user_model
+
+
+User = get_user_model()
 
 
 class UserListAPIView(generics.ListAPIView):
@@ -75,3 +81,26 @@ class InternalTokenValidationAPIView(APIView):
         return Response({
             "user_id": request.user.id,
         })
+
+
+class InternalUserLastSeenView(APIView):
+    permission_classes = [HasInternalAPIToken]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request, user_id: int):
+        last_seen = timezone.now()
+
+        updated = User.objects.filter(pk=user_id).update(
+            last_seen=last_seen,
+        )
+
+        if not updated:
+            return Response(
+                {"detail": "User not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {"last_seen": last_seen.isoformat()},
+            status=status.HTTP_200_OK,
+        )
