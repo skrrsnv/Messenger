@@ -1,5 +1,6 @@
 from rest_framework import generics, status
 from .models import User
+from apps.conversations.models import ConversationMember
 from .serializers import UserSerializer, RegisterSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -8,6 +9,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.utils import timezone
+from .internal_permissions import HasInternalAPIToken
+from django.contrib.auth import get_user_model
+
+
+User = get_user_model()
 
 
 class UserListAPIView(generics.ListAPIView):
@@ -68,10 +75,52 @@ class LogoutAPIView(APIView):
         
         
 class InternalTokenValidationAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
 
     def get(self, request):
         return Response({
             "user_id": request.user.id,
+        })
+
+
+class InternalUserLastSeenView(APIView):
+    permission_classes = [HasInternalAPIToken]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request, user_id: int):
+        last_seen = timezone.now()
+
+        updated = User.objects.filter(pk=user_id).update(
+            last_seen=last_seen,
+        )
+
+        if not updated:
+            return Response(
+                {"detail": "User not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {"last_seen": last_seen.isoformat()},
+            status=status.HTTP_200_OK,
+        )
+
+
+class InternalUserConversationsAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalAPIToken]
+
+    def get(self, request, user_id: int):
+        conversation_ids = list(
+            ConversationMember.objects.filter(
+                user_id=user_id,
+            ).values_list(
+                "conversation_id",
+                flat=True,
+            ).distinct()
+        )
+
+        return Response({
+            "conversation_ids": conversation_ids,
         })

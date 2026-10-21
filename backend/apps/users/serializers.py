@@ -15,7 +15,11 @@ class UserSerializer(serializers.ModelSerializer):
             "created_at",
             "last_seen",
             ]
-        
+        read_only_fields = [
+            "id",
+            "created_at",
+            "last_seen",
+        ]
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(

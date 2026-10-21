@@ -12,6 +12,7 @@ urlpatterns = [
     
     path('api/v1/internal/conversations/', include('apps.conversations.internal_urls')),
     path('api/v1/internal/auth/validate/', include('apps.users.internal_urls')),
+    path('api/v1/internal/users/', include('apps.users.internal_users_urls')),
 ]
 
 
