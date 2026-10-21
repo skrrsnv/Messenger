@@ -11,8 +11,13 @@ from .django_client import (
     is_conversation_member,
     validate_token,
     create_message,
+    get_user_conversation_ids,
+    persist_last_seen,
 )
 from .redis_subscriber import redis_event_listener
+from uuid import uuid4
+
+from .presence import PresenceService
 
 
 manager = ConnectionManager()
@@ -21,34 +26,57 @@ REDIS_URL = os.environ["REDIS_URL"]
 CHANNEL = "chat.events"
 
 async def publish_typing_event(
+    client: redis.Redis,
     event_type: str,
     conversation_id: int,
     user_id: int,
 ):
-    client = redis.from_url(
-        REDIS_URL,
-        decode_responses=True,
-    )
+    event = {
+        "type": event_type,
+        "conversation_id": conversation_id,
+        "user_id": user_id,
+    }
 
-    try:
+    await client.publish(
+        CHANNEL,
+        json.dumps(event),
+    )
+        
+
+
+async def publish_presence_event(
+    client: redis.Redis,
+    user_id: int,
+    status: str,
+    conversation_ids: list[int],
+    last_seen: str | None = None,
+):
+    for conversation_id in conversation_ids:
         event = {
-            "type": event_type,
+            "type": "presence.update",
             "conversation_id": conversation_id,
             "user_id": user_id,
+            "status": status,
+            "last_seen": last_seen,
         }
 
         await client.publish(
             CHANNEL,
             json.dumps(event),
         )
-    finally:
-        await client.aclose()
-        
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    client = redis.from_url(
+        REDIS_URL,
+        decode_responses=True,
+    )
+    app.state.redis = client
+
     subscriber_task = asyncio.create_task(
-        redis_event_listener(manager)
+        redis_event_listener(manager, client)
     )
 
     try:
@@ -58,6 +86,9 @@ async def lifespan(app: FastAPI):
 
         with suppress(asyncio.CancelledError):
             await subscriber_task
+
+        await client.aclose()
+
 
 
 app = FastAPI(lifespan=lifespan)
@@ -88,16 +119,44 @@ async def websocket_chat(
     if not is_member:
         await websocket.close(code=1008)
         return
+    
+    client: redis.Redis = websocket.app.state.redis
+    presence = PresenceService(client)
+    connection_id = str(uuid4())
 
     await manager.connect(conversation_id, websocket, user_id)
+    
+    presence_registered = False
 
-    print(
-        f"User {user_id} connected "
-        f"to conversation {conversation_id}"
-    )
-    
-    
     try:
+        became_online = await presence.connect(
+            user_id,
+            connection_id,
+        )
+        presence_registered = True
+
+        if became_online:
+            try:
+                conversation_ids = await get_user_conversation_ids(
+                    user_id
+                )
+                await publish_presence_event(
+                    client=client,
+                    user_id=user_id,
+                    status="online",
+                    conversation_ids=conversation_ids,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception(
+                    "Failed to publish online presence"
+                )
+
+        print(
+            f"User {user_id} connected "
+            f"to conversation {conversation_id}"
+        )
+
         while True:
             raw_data = await websocket.receive_text()
 
@@ -127,6 +186,7 @@ async def websocket_chat(
                         event_type == "typing.start",
                     )
                     await publish_typing_event(
+                        client=client,
                         event_type=event_type,
                         conversation_id=conversation_id,
                         user_id=user_id,
@@ -169,8 +229,6 @@ async def websocket_chat(
                         "type": "error",
                         "detail": "Unable to save message.",
                     })
-                    continue
-
                 continue
 
             await websocket.send_json({
@@ -182,24 +240,55 @@ async def websocket_chat(
         pass
 
     finally:
-        typing_user_id = manager.clear_typing_on_disconnect(
-            conversation_id,
-            websocket,
-        )
+        try:
+            typing_user_id = manager.clear_typing_on_disconnect(
+                conversation_id,
+                websocket,
+            )
 
-        manager.disconnect(conversation_id, websocket)
+            manager.disconnect(conversation_id, websocket)
 
-        if typing_user_id is not None:
-            try:
-                await publish_typing_event(
-                    event_type="typing.stop",
-                    conversation_id=conversation_id,
-                    user_id=typing_user_id,
+            if typing_user_id is not None:
+                try:
+                    await publish_typing_event(
+                        client=client,
+                        event_type="typing.stop",
+                        conversation_id=conversation_id,
+                        user_id=typing_user_id,
+                    )
+                except Exception:
+                    print("Error publishing typing.stop on disconnect")
+
+            if presence_registered:
+                became_offline = await presence.disconnect(
+                user_id,
+                connection_id,
                 )
-            except Exception:
-                print("Error publishing typing.stop on disconnect")
 
-        print(
-            f"User {user_id} disconnected "
-            f"from conversation {conversation_id}"
-        )
+                if became_offline:
+                    try:
+                        last_seen = await persist_last_seen(user_id)
+                        conversation_ids = await get_user_conversation_ids(
+                        user_id
+                        )
+
+                        await publish_presence_event(
+                            client=client,
+                            user_id=user_id,
+                            status="offline",
+                            conversation_ids=conversation_ids,
+                            last_seen=last_seen,
+                        )
+                    except Exception:
+                        import logging
+                        logging.getLogger(__name__).exception(
+                            "Failed to persist or publish offline presence"
+                        )
+
+        finally:
+            manager.disconnect(conversation_id, websocket)
+
+            print(
+                f"User {user_id} disconnected "
+                f"from conversation {conversation_id}"
+            )
