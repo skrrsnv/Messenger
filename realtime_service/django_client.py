@@ -19,10 +19,13 @@ async def validate_token(token: str) -> int | None:
         response = await client.get(
             url,
             headers=headers,
+            timeout=10.0,
         )
 
-    if response.status_code != 200:
+    if response.status_code in (401, 403):
         return None
+
+    response.raise_for_status()
 
     return response.json()["user_id"]
 
@@ -32,16 +35,23 @@ async def is_conversation_member(conversation_id: int, user_id: int,) -> bool:
         f"{DJANGO_URL}/api/v1/internal/"
         f"conversations/{conversation_id}/members/{user_id}/"
     )
+    
+    internal_token = os.getenv("INTERNAL_API_TOKEN")
+
+    if not internal_token:
+        raise RuntimeError("INTERNAL_API_TOKEN is not configured")
+
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(url)
+        response = await client.get(
+            url,
+            headers={"X-Internal-Token": internal_token},
+            timeout=10.0,
+        )
 
-    if response.status_code != 200:
-        return False
+    response.raise_for_status()
 
-    data = response.json()
-
-    return data["is_member"]
+    return response.json()["is_member"]
 
 
 async def create_message(conversation_id: int, text: str, user_access_token: str,) -> dict | None:
@@ -81,7 +91,7 @@ async def create_message(conversation_id: int, text: str, user_access_token: str
 
 
 
-async def get_user_conversation_ids(conversation_id: int, user_id: int) -> list[int]:
+async def get_user_conversation_ids(user_id: int) -> list[int]:
     internal_token = os.getenv("INTERNAL_API_TOKEN")
 
     if not internal_token:
@@ -89,7 +99,7 @@ async def get_user_conversation_ids(conversation_id: int, user_id: int) -> list[
 
     url = (
         f"{DJANGO_URL}/api/v1/internal/"
-        f"conversations/{conversation_id}/members/"
+        f"users/{user_id}/conversations/"
     )
 
     async with httpx.AsyncClient() as client:

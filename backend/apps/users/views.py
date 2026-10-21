@@ -1,5 +1,6 @@
 from rest_framework import generics, status
 from .models import User
+from apps.conversations.models import ConversationMember
 from .serializers import UserSerializer, RegisterSerializer
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -74,7 +75,7 @@ class LogoutAPIView(APIView):
         
         
 class InternalTokenValidationAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
 
     def get(self, request):
@@ -104,3 +105,22 @@ class InternalUserLastSeenView(APIView):
             {"last_seen": last_seen.isoformat()},
             status=status.HTTP_200_OK,
         )
+
+
+class InternalUserConversationsAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [HasInternalAPIToken]
+
+    def get(self, request, user_id: int):
+        conversation_ids = list(
+            ConversationMember.objects.filter(
+                user_id=user_id,
+            ).values_list(
+                "conversation_id",
+                flat=True,
+            ).distinct()
+        )
+
+        return Response({
+            "conversation_ids": conversation_ids,
+        })

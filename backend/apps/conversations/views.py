@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from .permissions import (CanDeleteConversation, CanUpdateConversation, IsConversationMember, 
     CanChangeMemberRole, CanManageMembers, CanRemoveMember)
 from config.pagination import ConversationCursorPagination
+from apps.users.internal_permissions import HasInternalAPIToken
 
 
 
@@ -160,6 +161,7 @@ class GroupConversationCreateAPIView(generics.CreateAPIView):
         
 
 class InternalConversationMembershipAPIView(APIView):
+    permission_classes = [HasInternalAPIToken]
 
     def get(self, request, conversation_id, user_id):
         is_member = ConversationMember.objects.filter(
