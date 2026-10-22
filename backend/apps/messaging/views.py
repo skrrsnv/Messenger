@@ -69,37 +69,80 @@ class MessageReadCreateAPIView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated, IsConversationMember]
     
     def create(self, request, *args, **kwargs):
-        message = get_object_or_404(
-            Message,
-            pk=kwargs["message_id"],
-            conversation_id=kwargs["conversation_id"],
-        )
-
-        if message.sender_id == request.user.id:
-            return Response(
-                {"detail": "You cannot mark your own message as read."},
-                status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            message = get_object_or_404(
+                Message.objects.select_for_update(),
+                pk=kwargs["message_id"],
+                conversation_id=kwargs["conversation_id"],
             )
 
-        message_read, created = MessageRead.objects.get_or_create(
-            message=message,
-            user=request.user,
-        )
+            if message.sender_id == request.user.id:
+                return Response(
+                    {"detail": "You cannot mark your own message as read."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        if created:
-            publish_message_event({
-                "type": "message.read",
-                "conversation_id": message.conversation_id,
-                "message_id": message.id,
-                "user_id": request.user.id,
-                "read_at": message_read.read_at.isoformat(),
-            })
+            now = timezone.now()
 
-        serializer = self.get_serializer(message_read)
+            delivery, delivery_created = (
+                MessageDelivery.objects.get_or_create(
+                    message=message,
+                    user=request.user,
+                    defaults={"delivered_at": now},
+                )
+            )
+
+            if delivery.delivered_at is None:
+                delivery.delivered_at = now
+                delivery.save(update_fields=["delivered_at"])
+                delivery_created = True
+
+            message_read, read_created = (
+                MessageRead.objects.get_or_create(
+                    message=message,
+                    user=request.user,
+                )
+            )
+
+            if delivery_created:
+                delivered_event = {
+                    "type": "message.delivered",
+                    "conversation_id": message.conversation_id,
+                    "message_id": message.id,
+                    "user_id": request.user.id,
+                    "status": "delivered",
+                    "delivered_at": delivery.delivered_at.isoformat(),
+                }
+                transaction.on_commit(
+                    lambda event=delivered_event:
+                        publish_message_event(event)
+                )
+
+            if read_created:
+                read_event = {
+                    "type": "message.read",
+                    "conversation_id": message.conversation_id,
+                    "message_id": message.id,
+                    "user_id": request.user.id,
+                    "status": "read",
+                    "read_at": message_read.read_at.isoformat(),
+                }
+                transaction.on_commit(
+                    lambda event=read_event:
+                        publish_message_event(event)
+                )
+
+            advance_message_status(message, Message.STATUS_READ)
+
+            serializer = self.get_serializer(message_read)
 
         return Response(
             serializer.data,
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            status=(
+                status.HTTP_201_CREATED
+                if read_created
+                else status.HTTP_200_OK
+            ),
         )
         
 
