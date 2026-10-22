@@ -13,6 +13,10 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db import transaction
 from apps.conversations.events import publish_message_created
+from django.utils import timezone
+from .models import MessageDelivery
+from .events import publish_message_event
+from rest_framework.exceptions import ValidationError
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
@@ -145,4 +149,51 @@ class InternalMessageCreateAPIView(APIView):
         return Response(
             event["data"],
             status=status.HTTP_201_CREATED,
+        )
+        
+
+class MessageDeliveryCreateAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated, IsConversationMember,]
+
+    def post(self, request, conversation_id, message_id):
+        message = get_object_or_404(
+            Message.objects.select_related("sender"),
+            pk=message_id,
+            conversation_id=conversation_id,
+        )
+
+        if message.sender_id == request.user.id:
+            return Response(
+                {"detail": "You cannot acknowledge delivery of your own message."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        delivery, created = MessageDelivery.objects.get_or_create(
+            message=message,
+            user=request.user,
+            defaults={"delivered_at": timezone.now()},
+        )
+
+        if not created and delivery.delivered_at is None:
+            delivery.delivered_at = timezone.now()
+            delivery.save(update_fields=["delivered_at"])
+
+        if created:
+            publish_message_event({
+                "type": "message.delivered",
+                "conversation_id": conversation_id,
+                "message_id": message.id,
+                "user_id": request.user.id,
+                "delivered_at": delivery.delivered_at.isoformat(),
+            })
+
+        return Response(
+            {
+                "message_id": message.id,
+                "user_id": request.user.id,
+                "status": "delivered",
+                "delivered_at": delivery.delivered_at,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
