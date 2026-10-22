@@ -74,8 +74,8 @@ class MessageReadCreateAPIView(generics.CreateAPIView):
             pk=kwargs["message_id"],
             conversation_id=kwargs["conversation_id"],
         )
-        
-        if message.sender == request.user:
+
+        if message.sender_id == request.user.id:
             return Response(
                 {"detail": "You cannot mark your own message as read."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -85,6 +85,15 @@ class MessageReadCreateAPIView(generics.CreateAPIView):
             message=message,
             user=request.user,
         )
+
+        if created:
+            publish_message_event({
+                "type": "message.read",
+                "conversation_id": message.conversation_id,
+                "message_id": message.id,
+                "user_id": request.user.id,
+                "read_at": message_read.read_at.isoformat(),
+            })
 
         serializer = self.get_serializer(message_read)
 
