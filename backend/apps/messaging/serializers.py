@@ -9,6 +9,7 @@ class MessageSerializer(serializers.ModelSerializer):
             'conversation',
             'sender',
             'text',
+            'status',
             'created_at',
             'updated_at',
             'is_deleted'
@@ -17,6 +18,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "id",
             "conversation",
             "sender",
+            "status",
             "created_at",
             "updated_at",
             "is_deleted",
