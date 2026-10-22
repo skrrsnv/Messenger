@@ -16,7 +16,7 @@ from apps.conversations.events import publish_message_created
 from django.utils import timezone
 from .models import MessageDelivery
 from .events import publish_message_event
-from rest_framework.exceptions import ValidationError
+from .statuses import advance_message_status
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
@@ -177,43 +177,58 @@ class MessageDeliveryCreateAPIView(APIView):
     permission_classes = [IsAuthenticated, IsConversationMember,]
 
     def post(self, request, conversation_id, message_id):
-        message = get_object_or_404(
-            Message.objects.select_related("sender"),
-            pk=message_id,
-            conversation_id=conversation_id,
-        )
-
-        if message.sender_id == request.user.id:
-            return Response(
-                {"detail": "You cannot acknowledge delivery of your own message."},
-                status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            message = get_object_or_404(
+                Message.objects.select_for_update(),
+                pk=message_id,
+                conversation_id=conversation_id,
             )
 
-        delivery, created = MessageDelivery.objects.get_or_create(
-            message=message,
-            user=request.user,
-            defaults={"delivered_at": timezone.now()},
-        )
+            if message.sender_id == request.user.id:
+                return Response(
+                    {"detail": "You cannot acknowledge delivery of your own message."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        if not created and delivery.delivered_at is None:
-            delivery.delivered_at = timezone.now()
-            delivery.save(update_fields=["delivered_at"])
+            delivery, created = MessageDelivery.objects.get_or_create(
+                message=message,
+                user=request.user,
+                defaults={"delivered_at": timezone.now()},
+            )
 
-        if created:
-            publish_message_event({
-                "type": "message.delivered",
-                "conversation_id": conversation_id,
-                "message_id": message.id,
-                "user_id": request.user.id,
-                "delivered_at": delivery.delivered_at.isoformat(),
-            })
+            if delivery.delivered_at is None:
+                delivery.delivered_at = timezone.now()
+                delivery.save(update_fields=["delivered_at"])
+                created = True
+
+            status_changed = advance_message_status(
+                message,
+                Message.STATUS_DELIVERED,
+            )
+
+            if created:
+                event = {
+                    "type": "message.delivered",
+                    "conversation_id": conversation_id,
+                    "message_id": message.id,
+                    "user_id": request.user.id,
+                    "status": "delivered",
+                    "delivered_at": delivery.delivered_at.isoformat(),
+                }
+                transaction.on_commit(
+                    lambda event=event: publish_message_event(event)
+                )
 
         return Response(
             {
                 "message_id": message.id,
                 "user_id": request.user.id,
-                "status": "delivered",
+                "status": message.status,
                 "delivered_at": delivery.delivered_at,
             },
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            status=(
+                status.HTTP_201_CREATED
+                if created
+                else status.HTTP_200_OK
+            ),
         )
