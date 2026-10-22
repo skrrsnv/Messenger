@@ -151,9 +151,20 @@ class InternalMessageCreateAPIView(APIView):
             },
         }
 
-        transaction.on_commit(
-            lambda: publish_message_created(event)
-        )
+        sent_event = {
+            "type": "message.sent",
+            "conversation_id": message.conversation_id,
+            "message_id": message.id,
+            "user_id": user_id,
+            "status": "sent",
+            "created_at": message.created_at.isoformat(),
+        }
+
+        def publish_events():
+            publish_message_created(event)
+            publish_message_event(sent_event)
+
+        transaction.on_commit(publish_events)
 
         return Response(
             event["data"],
