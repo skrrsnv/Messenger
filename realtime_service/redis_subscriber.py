@@ -13,6 +13,17 @@ REDIS_URL = os.environ["REDIS_URL"]
 CHANNEL = "chat.events"
 
 
+ALLOWED_EVENT_TYPES = {
+    "message.created",
+    "message.sent",
+    "message.delivered",
+    "message.read",
+    "typing.start",
+    "typing.stop",
+    "presence.update",
+}
+
+
 async def redis_event_listener(
     manager: ConnectionManager,
     client: redis.Redis,
@@ -31,12 +42,7 @@ async def redis_event_listener(
                 try:
                     event = json.loads(message["data"])
 
-                    if event.get("type") not in (
-                        "message.created",
-                        "typing.start",
-                        "typing.stop",
-                        "presence.update",
-                    ):
+                    if event.get("type") not in ALLOWED_EVENT_TYPES:
                         continue
 
                     conversation_id = int(
