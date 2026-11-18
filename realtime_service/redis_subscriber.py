@@ -18,6 +18,7 @@ ALLOWED_EVENT_TYPES = {
     "message.sent",
     "message.delivered",
     "message.read",
+    "message.status.updated",
     "typing.start",
     "typing.stop",
     "presence.update",
