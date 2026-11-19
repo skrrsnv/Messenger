@@ -21,6 +21,7 @@ from .statuses import (
     initialize_group_recipients,
     recalculate_group_message_status,
 )
+from .tasks import create_offline_notifications
 
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):
@@ -37,6 +38,9 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
             message = serializer.save(
             sender=self.request.user,
             conversation_id=self.kwargs["conversation_id"],
+        )
+            transaction.on_commit(
+            lambda: create_offline_notifications.delay(message.id)
         )
 
         initialize_group_recipients(message)
@@ -244,6 +248,10 @@ class InternalMessageCreateAPIView(APIView):
         conversation_id=conversation_id,
         sender_id=user_id,
         text=serializer.validated_data["text"],
+        )
+        
+        transaction.on_commit(
+        lambda: create_offline_notifications.delay(message.id)
         )
 
         initialize_group_recipients(message)
