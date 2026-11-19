@@ -71,3 +71,42 @@ class MessageDelivery(models.Model):
 
     def __str__(self):
         return f"Message {self.message_id} delivered to User {self.user_id}"
+    
+
+class Notification(models.Model):
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
+    is_read = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "message"],
+                name="unique_user_message_notification",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"Notification for User {self.user_id} "
+            f"about Message {self.message_id}"
+        )
